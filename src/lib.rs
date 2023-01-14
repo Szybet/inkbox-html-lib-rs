@@ -9,7 +9,7 @@ use visdom::Vis;
 
 #[no_mangle]
 pub unsafe extern "C" fn cut_off_head(html_str: *const c_char) -> *const c_char {
-    println!("Starting cut_off_head from libreader-rs");
+    //println!("Starting cut_off_head from libreader-rs");
     let html_file_string = CStr::from_ptr(html_str).to_str().unwrap();
     //println!("Html file: {}", html_file_string);
     // unwrap doesn't work
