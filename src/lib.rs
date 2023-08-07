@@ -9,8 +9,8 @@ use std::fs::File;
 use std::io::prelude::*;
 
 // html
-use visdom::Vis;
 use regex::Regex;
+use visdom::Vis;
 
 #[no_mangle]
 pub unsafe extern "C" fn cut_off_head(html_str: *const c_char) -> *const c_char {
@@ -170,54 +170,97 @@ pub unsafe extern "C" fn add_spaces(html_str: *const c_char) -> *const c_char {
 }
 
 // Highlighting:
-
-pub fn convert_plain_to_html(plain: String) -> String {
+// All functions related to it need to be converted from the outside to non html letters
+pub fn convert_plain_to_html(plain: &mut String) {
     //println!("Calling convert_plain_to_html: {}", plain);
-    let mut html: String = String::new();
-    html_escape::decode_html_entities_to_string(plain, &mut html);
-    html = html.replace("&#x20;", " "); // We don't want that
-    
-    return html;
+    // Why the fuck does it add
+    let temp = plain.clone();
+    plain.clear();
+    html_escape::decode_html_entities_to_string(temp, plain);
 }
 
-//pub fn find_original(originalCode: &mut String, )
+pub fn get_word_before_char(html: &String, index: usize) -> String {
+    let mut word: String = String::new();
+    let chars_vec: Vec<char> = html.chars().collect();
+    //println!("For position index: {}", index);
+
+    let mut counter = 0;
+    loop {
+        let final_post: isize = (index - counter) as isize;
+        let character = chars_vec[final_post as usize];
+        //println!("At position {} character is: {:?}", final_post, character);
+        if character != ' ' {
+            word.push(character);
+            counter += 1;
+            if final_post == 0 {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    // https://stackoverflow.com/questions/27996430/reversing-a-string-in-rust
+    word = word.chars().rev().collect::<String>();
+    //println!("Found word: {}", word);
+    word
+}
+
+pub fn highlight_html_code(html: String, plain: String) -> String {
+    let mut final_highlight = html.clone();
+    let start_pure_high = "<b>";
+    let stop_pure_high = "</b>";
+    let index: Vec<(usize, &str)> = html.match_indices("</").collect();
+    let mut offset = 0;
+    for pos in index {
+        let pos_real: usize = pos.0 - 2;
+        let word_left = &get_word_before_char(&html, pos_real);
+        println!("Word left: {}", word_left);
+        if plain.contains(word_left) {
+            println!("Word found, adding at: {}", pos_real + offset);
+            final_highlight.insert_str(pos_real + offset, start_pure_high);
+            offset = offset + start_pure_high.len();
+        }
+    }
+
+    final_highlight
+}
 
 // Finds plain text in html code even if there are tags between it, and outputs the text in the html code that contains those tags
-// return arguments: String of the html text, if string exists ( highlighting was found ), if it's cutted off ( to the next page )
-pub fn find_text_in_html_code(plain_text: String, html_code: String) -> (Option<String>, bool, bool) {
-    let mut text = convert_plain_to_html(plain_text);
+// return arguments: String of the html text, if it's cutted off ( to the next page )
+pub fn find_text_in_html_code(plain_text: String, html_code: String) -> (Option<String>, bool) {
+    let plain_text_split_whitespace: Vec<&str> = plain_text.split_whitespace().collect();
     let mut start: usize = 0;
     let mut end: usize;
     let mut list_start: Vec<usize> = Vec::new();
-    let mut list_latest: Vec<usize> = Vec::new();
     let mut conflict: bool = false;
 
-    let mut empty = false;
-    
     // Looking for start
-    for word in text.split_whitespace() {
+    for word in plain_text_split_whitespace.clone() {
         // HTML space
         //println!("the word: {}", word);
         let index: Vec<(usize, &str)> = html_code.match_indices(word).collect();
         if index.len() == 0 && conflict == false {
-            empty = true;
-            return (None, false, false)
+            return (None, false);
         }
         if index.len() > 1 {
             for num in index {
                 if conflict == false {
+                    println!("The first word is: {} at byte {}", num.1, num.0);
                     list_start.push(num.0);
-                } else {
-                    list_latest.push(num.0);
                 }
             }
             conflict = true;
+            println!("There is a conflict");
         } else {
             if conflict == false {
-                println!("Starting word: {}", word);
+                println!("Starting word without conflict: {}", word);
                 start = index.first().unwrap().0;
             } else {
+                // In conclusion, we are here because while iterating, we finally found a match.
+                // Now we need to conclude this match with items in list_start, which one fits the best ( is to the nearest left )
+
                 // The nearest in start? to the left
+                // Not tested
                 let final_index = index.first().unwrap().0;
                 let mut smallest_diffrence = 99999;
                 for position in list_start.clone() {
@@ -235,14 +278,13 @@ pub fn find_text_in_html_code(plain_text: String, html_code: String) -> (Option<
     if conflict == true {
         println!("There are many duplicate texts...");
         start = list_start.first().unwrap().clone();
-        conflict = false;
     }
     println!("Index of start is: {}", start); // Bytes
-    let mut html_code_from_start: Vec<&str> = html_code.split_at(start).1.split_whitespace().collect();
+    let mut html_code_from_start_string: &str = html_code.split_at(start).1;
+    let mut html_code_from_start: Vec<&str> =
+        html_code_from_start_string.split_whitespace().collect();
     //println!("Char vec: {:?}", html_code_from_start);
-    let last_word_vec: Vec<&str> = text.split_whitespace().collect();
-    println!("last_word_vec is: {:?}", last_word_vec);
-    let last_word = last_word_vec.last().unwrap().clone();
+    let last_word = plain_text_split_whitespace.last().unwrap().clone();
     println!("Last word is: {}", last_word);
 
     // TODO: account for many the same last words...
@@ -250,27 +292,33 @@ pub fn find_text_in_html_code(plain_text: String, html_code: String) -> (Option<
     let mut found_word = false;
     let regex: Regex = Regex::new("<[^>]*>").unwrap();
     for kinda_word in html_code_from_start {
-        println!("kinda_word: {}", kinda_word);
+        //println!("kinda_word: {}", kinda_word);
         count_bytes += kinda_word.len() + 1;
         if kinda_word.contains(last_word) {
+            println!("Last word contains match: {} {}", kinda_word, last_word);
             let word_not_html = regex.replace_all(kinda_word, "");
             if word_not_html == last_word {
+                println!("Found last word match");
                 found_word = true;
                 break;
             }
         }
     }
-    let mut end = start + count_bytes;
-    if found_word == false {
-        // The text is cutted off
-        end -= 1;
-        // TODO:
-    }
-    
+    // End is relative
+    let mut end = count_bytes;
+    // Not sure, but does this need to be always on?
+    //if found_word == false {
+    // The text is cutted off
+    end -= 1;
+    // TODO?
+    //}
+
     println!("End is at: {}", end);
 
+    let final_string = html_code_from_start_string.split_at(end).0;
+    println!("The final thing: {:?}", final_string);
 
-    return (None, false, false)
+    return (Some(final_string.to_owned()), !found_word);
 }
 
 // TODO: this works only in one way, so make it work in reverse unlike its now
@@ -280,7 +328,8 @@ pub fn test_convert_plain_to_html() {
     let mut file = File::open("examples/example.html").unwrap();
     let mut contents = String::new();
     file.read_to_string(&mut contents).unwrap();
-    println!("Converted to html: {}", convert_plain_to_html(contents));
+    convert_plain_to_html(&mut contents);
+    println!("Converted to html: {}", contents);
 }
 
 #[test]
@@ -296,5 +345,32 @@ pub fn test_find_text_in_html_code() {
     let mut html_string = String::new();
     file_html.read_to_string(&mut html_string).unwrap();
 
+    convert_plain_to_html(&mut selection_string);
+    convert_plain_to_html(&mut html_string);
+
+    println!("The html code: {}", html_string);
+
     find_text_in_html_code(selection_string, html_string);
+}
+
+#[test]
+pub fn test_highlight_html_code() {
+    let mut file_html = File::open("examples/example-selection-html.html").unwrap();
+    let mut html_string = String::new();
+    file_html.read_to_string(&mut html_string).unwrap();
+
+    convert_plain_to_html(&mut html_string);
+
+    let mut file_selection = File::open("examples/example-selection.html").unwrap();
+    let mut selection_string = String::new();
+    file_selection
+        .read_to_string(&mut selection_string)
+        .unwrap();
+
+    let content = highlight_html_code(html_string, selection_string);
+
+    std::fs::remove_file("tmp/highlight.html");
+
+    let mut file = File::create("tmp/highlight.html").unwrap();
+    file.write_all(content.as_bytes()).unwrap();
 }
