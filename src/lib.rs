@@ -1,3 +1,5 @@
+#![feature(round_char_boundary)]
+
 // C
 use core::ffi::c_char;
 use std::ffi::{CStr, CString};
@@ -177,12 +179,15 @@ pub fn convert_plain_to_html(plain: &mut String) {
     let temp = plain.clone();
     plain.clear();
     html_escape::decode_html_entities_to_string(temp, plain);
+    // ?
+    *plain = plain.replace("\n", "");
+    *plain = plain.replace("\\n", "");
 }
 
-pub fn get_word_before_char(html: &String, index: usize) -> String {
+pub fn get_word_before_char(html: &String, index: i32) -> String {
     let mut word: String = String::new();
     let chars_vec: Vec<char> = html.chars().collect();
-    //println!("For position index: {}", index);
+    println!("For position index: {}", index);
 
     let mut counter = 0;
     loop {
@@ -205,20 +210,45 @@ pub fn get_word_before_char(html: &String, index: usize) -> String {
     word
 }
 
+pub fn stupid_rust_string_index(html: &String, to_find: String) -> Vec<i32> {
+    let mut the_veck: Vec<char> = Vec::new();
+    let mut do_char_first = true;
+    let mut index_count: Vec<i32> = Vec::new();
+    let mut counter = 0;
+    for byte in html.chars() {
+        if the_veck.len() == to_find.len() {
+            the_veck.remove(0);
+        }
+        the_veck.push(byte);
+        let str: String = the_veck.clone().into_iter().collect();
+        if str == to_find {
+            index_count.push(counter);
+            println!("Found string index at: {}", counter);
+        }
+        counter += 1;
+    }
+    index_count
+}
+
 pub fn highlight_html_code(html: String, plain: String) -> String {
     let mut final_highlight = html.clone();
     let start_pure_high = "<b>";
     let stop_pure_high = "</b>";
-    let index: Vec<(usize, &str)> = html.match_indices("</").collect();
+    let find_str_after_text = String::from("</");
+    let index: Vec<i32> = stupid_rust_string_index(&html, find_str_after_text.clone());
+    println!("Pure index: {:?}", index);
     let mut offset = 0;
     for pos in index {
-        let pos_real: usize = pos.0 - 2;
+        // match_indices fucks here some errors
+        let pos_real = pos - find_str_after_text.len() as i32; // </ it's TODO: maybe /2
         let word_left = &get_word_before_char(&html, pos_real);
         println!("Word left: {}", word_left);
         if plain.contains(word_left) {
             println!("Word found, adding at: {}", pos_real + offset);
-            final_highlight.insert_str(pos_real + offset, start_pure_high);
-            offset = offset + start_pure_high.len();
+            // TODO: this is not ideal
+            let very_final_pos = final_highlight.ceil_char_boundary((pos_real + offset) as usize);
+            final_highlight.insert_str(very_final_pos, start_pure_high);
+            offset = offset + start_pure_high.len() as i32;
         }
     }
 
@@ -361,11 +391,18 @@ pub fn test_highlight_html_code() {
 
     convert_plain_to_html(&mut html_string);
 
+    std::fs::remove_file("tmp/plain-html-selection.html");
+
+    let mut file = File::create("tmp/plain-html-selection.html").unwrap();
+    file.write_all(html_string.as_bytes()).unwrap();
+
     let mut file_selection = File::open("examples/example-selection.html").unwrap();
     let mut selection_string = String::new();
     file_selection
         .read_to_string(&mut selection_string)
         .unwrap();
+
+    convert_plain_to_html(&mut selection_string);
 
     let content = highlight_html_code(html_string, selection_string);
 
