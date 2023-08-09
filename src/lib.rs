@@ -230,6 +230,43 @@ pub fn stupid_rust_string_index(html: &String, to_find: String) -> Vec<i32> {
     index_count
 }
 
+pub fn find_valid_byte_position(html: &String, pos: usize) -> usize {
+    let possible_chars: Vec<char> = vec!['<', '>'];
+    let mut offset: usize = 0;
+    loop {
+        let mut exit_it = 0;
+
+        let final_plus = pos + offset;
+        if final_plus < html.len()
+            && html.is_char_boundary(final_plus as usize)
+            && possible_chars.contains(&html.chars().nth(final_plus as usize).unwrap())
+        {
+            return final_plus;
+        } else {
+            exit_it += 1;
+        }
+
+        let final_minus = pos - offset;
+        if final_minus as usize > 0 {
+            if html.is_char_boundary(final_minus as usize)
+                && possible_chars.contains(&html.chars().nth(final_minus as usize).unwrap())
+            {
+                return final_minus;
+            }
+        } else {
+            exit_it += 1;
+        }
+
+        if exit_it == 2 {
+            break;
+        }
+
+        offset += 1;
+    }
+    println!("We are in trouble");
+    0
+}
+
 pub fn highlight_html_code(html: String, plain: String) -> String {
     let mut final_highlight = html.clone();
     let start_pure_high = "<b>";
@@ -240,15 +277,24 @@ pub fn highlight_html_code(html: String, plain: String) -> String {
     let mut offset = 0;
     for pos in index {
         // match_indices fucks here some errors
-        let pos_real = pos - find_str_after_text.len() as i32; // </ it's TODO: maybe /2
+        println!("offset is: {}", offset);
+        let pos_real = pos - 2 as i32; // </ it's TODO: maybe /2
         let word_left = &get_word_before_char(&html, pos_real);
         println!("Word left: {}", word_left);
         if plain.contains(word_left) {
-            println!("Word found, adding at: {}", pos_real + offset);
             // TODO: this is not ideal
-            let very_final_pos = final_highlight.ceil_char_boundary((pos_real + offset) as usize);
+            // TODO: test +1
+            let very_final_pos =
+                find_valid_byte_position(&html, (pos_real + offset).try_into().unwrap()) + 1;
+
+            println!("Word found, adding at: {} but the real position was: {}", very_final_pos, pos_real + offset);
+
+            // Rewrite insert str, its stupid
             final_highlight.insert_str(very_final_pos, start_pure_high);
-            offset = offset + start_pure_high.len() as i32;
+            if(offset == 3) {
+                return final_highlight;
+            }
+            offset = offset + 3 as i32;
         }
     }
 
@@ -404,6 +450,7 @@ pub fn test_highlight_html_code() {
 
     convert_plain_to_html(&mut selection_string);
 
+    // Important: plain
     let content = highlight_html_code(html_string, selection_string);
 
     std::fs::remove_file("tmp/highlight.html");
