@@ -1,17 +1,5 @@
 // Propably there are conflicts for index of chars and bytes in strings... well that's bad
 
-// All functions related to it need to be converted from the outside to non html letters
-pub fn convert_plain_to_html(plain: &mut String) {
-    //println!("Calling convert_plain_to_html: {}", plain);
-    // Why the fuck does it add
-    let temp = plain.clone();
-    plain.clear();
-    html_escape::decode_html_entities_to_string(temp, plain);
-    // ?
-    *plain = plain.replace("\n", "");
-    *plain = plain.replace("\\n", "");
-}
-
 pub fn get_word_before_char(html: &String, index: i32) -> String {
     let mut word: String = String::new();
     let chars_vec: Vec<char> = html.chars().collect();

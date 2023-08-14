@@ -172,14 +172,44 @@ pub unsafe extern "C" fn add_spaces(html_str: *const c_char) -> *const c_char {
 }
 
 // Highlighting:
+// All functions related to it need to be converted from the outside to non html letters
+pub fn convert_plain_to_html(plain: &mut String) {
+    //println!("Calling convert_plain_to_html: {}", plain);
+    // Why the fuck does it add
+    let temp = plain.clone();
+    plain.clear();
+    html_escape::decode_html_entities_to_string(temp, plain);
+    // ?
+    *plain = plain.replace("\n", "");
+    *plain = plain.replace("\\n", "");
+}
+
 pub fn highlight_html_code(html: String, plain: String) -> String {
     let mut final_highlight = html.clone();
     let start_pure_high = "<b>";
     let stop_pure_high = "</b>";
-    // Regex...
-    // <span style=([^>]*)>
+    let text_ends_at = "</span>";
 
-    final_highlight
+    // Regex...
+    // <span style=[^>]*>
+    let re = Regex::new(r"<span style=[^>]*>").unwrap();
+    let mut span = String::new();
+    // All fonts / captures are the the same
+    if let Some(captures) = re.captures(&final_highlight) {
+        // Use indexing (1) to access the first capture group value
+        if let Some(first_capture) = captures.get(0) {
+            span = first_capture.as_str().to_string();
+            println!("First captured value: {}", span);
+        }
+    }
+    let start_value = &format!("{}{}", span, start_pure_high);
+    println!("start_value: {}", start_value);
+    let end_value = &format!("{}{}", stop_pure_high, text_ends_at);
+    println!("end_value: {}", end_value);
+    final_highlight = final_highlight.replace(&span, start_value);
+    final_highlight = final_highlight.replace(text_ends_at, end_value);
+    
+    format!("{}{}{}", start_pure_high, final_highlight, stop_pure_high)
 }
 
 // Finds plain text in html code even if there are tags between it, and outputs the text in the html code that contains those tags
