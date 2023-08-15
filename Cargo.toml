@@ -11,7 +11,9 @@ html-escape = "0.2.13"
 regex = "1.5"
 
 [lib]
-crate-type = ["staticlib"]
+# https://users.rust-lang.org/t/does-crate-type-has-effect-on-integration-test/76634
+# That's so dumb
+crate-type = ["staticlib", "rlib"]
 
 [profile.release]
 strip = true
