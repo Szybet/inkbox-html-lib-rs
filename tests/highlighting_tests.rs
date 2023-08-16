@@ -34,11 +34,41 @@ pub fn second_main_one_main_highlight() {
 pub fn second_main_one_next_highlight() {
     let main_page = load_file("examples/2/main_page.html");
     let next_page = load_file("examples/2/next_page.html");
-    let highlight_1 = load_file("examples/2/selection_next.html");
+    let highlight_1: String = load_file("examples/2/selection_next.html");
 
     let final_html = highlight_page(main_page, String::new(), next_page, highlight_1);
 
     write_file("tmp/second_main_one_next_highlight.html", final_html);
+}
+
+#[test]
+pub fn second_main_one_previous_highlight() {
+    let main_page = load_file("examples/2/main_page.html");
+    let previous_page = load_file("examples/2/previous_page.html");
+    let highlight_1 = load_file("examples/2/selection_previous.html");
+
+    let final_html = highlight_page(main_page, previous_page, String::new(), highlight_1);
+
+    write_file("tmp/second_main_one_next_highlight.html", final_html);
+}
+
+#[test]
+pub fn second_main_all_highlight() {
+    let main_page = load_file("examples/2/main_page.html");
+    let previous_page = load_file("examples/2/previous_page.html");
+    let next_page = load_file("examples/2/next_page.html");
+    let highlight_next: String = load_file("examples/2/selection_next.html");
+    let highlight_previous = load_file("examples/2/selection_previous.html");
+    let highlight_main = load_file("examples/2/selection_main.html");
+
+    let mut high_vec = Vec::new();
+    high_vec.push(highlight_main);
+    high_vec.push(highlight_next);
+    high_vec.push(highlight_previous);
+
+    let final_html = highlight_page(main_page, previous_page, next_page, high_vec.join("U+001F"));
+
+    write_file("tmp/second_main_all_highlight.html", final_html);
 }
 
 // dir 1

@@ -27,7 +27,27 @@ pub fn diffrence_in_string_left(longer_string: String, other_string: String) -> 
     }
 
     final_string.pop(); // space
-    println!("The cutted text is: {}", final_string);
+    println!("The diffrence text is ( left ): {}", final_string);
+
+    final_string
+}
+
+// From right ( previous page )
+// Weird but works?
+pub fn diffrence_in_string_right(longer_string: String, other_string: String) -> String {
+    let mut final_string = String::new();
+    let longer_words: Vec<&str> = longer_string.split_whitespace().collect();
+    let words: Vec<&str> = other_string.split_whitespace().collect();
+
+    let num_diffrence = longer_words.len() - words.len(); // words were cutted out? len starts from 1
+                                                              // Maybe a better way?
+    for word in (0..num_diffrence).rev() {
+        final_string.insert_str(0, longer_words[word]);
+        final_string.insert(0, ' ');
+    }
+
+    //final_string.pop(); // space
+    println!("The diffrence text is ( right ): {}", final_string);
 
     final_string
 }
@@ -90,7 +110,33 @@ pub fn highlight_page(
             // Its cutted to the previous page
             if result.2 == true {
                 println!("One highlight is cutted to the previous page");
-                // Check for it
+                let clean_highlight = purge_html(highlight.to_string());
+                let clean_html_highlight = purge_html(html_highlight.to_string()); // Not so html anymore
+                println!("clean_highlight: {}", clean_highlight);
+                println!("clean_html_highlight: {}", clean_html_highlight);
+                let diffrence = diffrence_in_string_right(clean_highlight, clean_html_highlight);
+
+                let pure_previous_page = purge_html(converted_previous_page.clone());
+                let diffrence_vec: Vec<&str> = diffrence.split_ascii_whitespace().collect();
+                let pure_previous_page_vec: Vec<&str> =
+                pure_previous_page.split_ascii_whitespace().collect();
+                let mut counter = pure_previous_page_vec.len() - 1;
+                let mut identical = true;
+                for word in diffrence_vec.iter().rev() {
+                    if word != &pure_previous_page_vec[counter] {
+                        println!("It's not identical");
+                        identical = false;
+                        break;
+                    }
+                    counter -= 1;
+                }
+                if identical == false {
+                    println!("This highlight is cutted but doesn't appear on the previous page");
+                    break;
+                } else {
+                    println!("The highlight is on the previous page! that's good");
+                }
+
             }
             let html_highlight_done = highlight_html_code(&html_highlight);
             converted_main_page =
@@ -157,43 +203,76 @@ pub fn find_text_in_html_code(
     let mut start: usize = 0;
     let mut end: usize;
     let mut list_start: Vec<usize> = Vec::new();
-    let mut conflict: bool = false;
+    let mut conflict: bool = false; // Variable used inside start loop
     let mut conflict_resolved = false;
     let mut previous_page_cutted_off = false;
     let mut no_conflict = false;
-
+    // For previous support
+    let mut false_strings: Vec<String> = Vec::new(); // If `Final smallest diffrence:` didn't changed, put this word here to ignore it & re run the loop
+    let mut first_word_str_prev: String = String::new();
+    let mut exit_inf_loop = false;
     // Looking for start
-    for word in plain_text_split_whitespace.clone() {
-        // HTML space
-        //println!("the word: {}", word);
-        let index: Vec<(usize, &str)> = html_code.match_indices(word).collect();
-        if index.len() == 0 && conflict == false {
-            println!("previous_page_cutted_off set to true");
-            previous_page_cutted_off = true;
-        }
-        if index.len() > 1 {
-            for num in index {
-                if conflict == false {
-                    println!("The first word is: {} at byte {}", num.1, num.0);
-                    list_start.push(num.0);
-                }
+    loop {
+        for word in plain_text_split_whitespace.clone() {
+            if false_strings.contains(&word.to_string()) { // wtf &String
+                println!("Skipping the first word: we maybe need to look at previous page?");
+                continue;
             }
-            conflict = true;
-            println!("There is a conflict");
-        } else {
-            if conflict == false {
+            if false_strings.len() >= plain_text_split_whitespace.len() {
+                println!("We checked for all words: there are none valid, no highlight on this page...");
+                return (None, false, false);
+            }
+            // HTML space
+            //println!("the word: {}", word);
+            let index: Vec<(usize, &str)> = html_code.match_indices(word).collect();
+            if index.len() == 0 && conflict == false {
+                println!("previous_page_cutted_off set to true");
+                previous_page_cutted_off = true;
+                continue;
+            }
+            if index.len() > 1 {
+                for num in index {
+                    if conflict == false {
+                        println!("The first word is: {} at byte {}", num.1, num.0);
+                        list_start.push(num.0);
+                        first_word_str_prev = num.1.to_string();
+                    }
+                }
+                conflict = true;
+                println!("There is a conflict");
+            } else if conflict == false {
                 println!("Starting word without conflict: {}", word);
-                start = index.first().unwrap().0;
-                no_conflict = true;
+                let first_word = index.first();
+                if let Some(first_word_solution) = first_word {
+                    start = first_word_solution.0;
+                    no_conflict = true;
+                    conflict = false;
+                    exit_inf_loop = true;
+                    break;
+                } else {
+                    println!("There is no such word... continue ( previous page? )");
+                    conflict = false; // Reset
+                    false_strings.push(first_word_str_prev.clone());
+                    continue;
+                }
+                //start = index.first().unwrap().0;
+
             } else {
                 // In conclusion, we are here because while iterating, we finally found a match.
                 // Now we need to conclude this match with items in list_start, which one fits the best ( is to the nearest left )
 
                 // The nearest in start? to the left
-                // Not tested
 
+                if index.first().is_none() {
+                    // Not sure about this one
+                    conflict = false; // Only to reset
+                    false_strings.push(first_word_str_prev.clone());
+                    break;
+                }
                 let final_index = index.first().unwrap().0 as isize;
-                let mut smallest_diffrence = 99999;
+
+                let static_num = 999999;
+                let mut smallest_diffrence = static_num;
                 println!("Comparing first words, final index is: {}", final_index);
                 for position in list_start.clone() {
                     let calc = final_index - position as isize;
@@ -204,13 +283,24 @@ pub fn find_text_in_html_code(
                         start = position;
                     }
                 }
-                println!("Final smallest diffrence: {}", smallest_diffrence);
-                conflict_resolved = true;
+                if start as isize != static_num {
+                    println!("Final smallest diffrence: {}", smallest_diffrence);
+                    conflict = false;
+                    exit_inf_loop = true;
+                    conflict_resolved = true;
+                    break;
+                } else {
+                    conflict = false; // Only to reset
+                    false_strings.push(first_word_str_prev.clone());
+                    break;
+                }
             }
-            conflict = false;
+        }
+        if exit_inf_loop == true {
             break;
         }
     }
+
     if conflict == true {
         println!("There are many duplicate texts...");
         start = list_start.first().unwrap().clone();
