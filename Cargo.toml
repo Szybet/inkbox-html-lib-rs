@@ -1,5 +1,5 @@
 [package]
-name = "reader"
+name = "reader-rs"
 version = "0.1.0"
 edition = "2021"
 
@@ -13,7 +13,9 @@ regex = "1.5"
 [lib]
 # https://users.rust-lang.org/t/does-crate-type-has-effect-on-integration-test/76634
 # That's so dumb
-crate-type = ["staticlib", "rlib"]
+# Add rlib for working tests
+# Remove rlib for working CPP library
+crate-type = ["staticlib"] # , "rlib"
 
 [profile.release]
 strip = true

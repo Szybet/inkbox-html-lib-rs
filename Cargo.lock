@@ -68,7 +68,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "reader"
+name = "reader-rs"
 version = "0.1.0"
 dependencies = [
  "html-escape",
