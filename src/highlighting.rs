@@ -1,12 +1,28 @@
-use core::num;
-
 // html
 use regex::Regex;
 
-// A CPP wrapper is needed for this function
-// plain_highlights is list of plain non html highlights splitted by U+001F ( Literally this string ) which is https://symbl.cc/en/001F/
-// This function returns a new updated main_page
-// Pages can be empty, indicating they don't exist
+// C
+use core::ffi::c_char;
+use std::ffi::{CStr, CString};
+
+// highlight_page c wrapper
+/*
+    main_page: String,
+    previous_page: String,
+    next_page: String,
+    plain_highlights: String,
+*/
+#[no_mangle]
+pub unsafe extern "C" fn highlight_page_c(main_page: *const c_char, previous_page: *const c_char, next_page: *const c_char, plain_highlights: *const c_char) -> *const c_char {
+
+    let main_page_pure = CStr::from_ptr(main_page).to_str().unwrap().to_string();
+    let previous_page_pure = CStr::from_ptr(previous_page).to_str().unwrap().to_string();
+    let next_page_pure = CStr::from_ptr(next_page).to_str().unwrap().to_string();
+    let plain_highlights_pure = CStr::from_ptr(plain_highlights).to_str().unwrap().to_string();
+
+    let new_page = highlight_page(main_page_pure, previous_page_pure, next_page_pure, plain_highlights_pure);
+    return Box::leak(CString::new(new_page).unwrap().into_boxed_c_str()).as_ptr()
+}
 
 pub fn purge_html(html: String) -> String {
     let regex: Regex = Regex::new(r"<.*?>").unwrap();
@@ -52,6 +68,10 @@ pub fn diffrence_in_string_right(longer_string: String, other_string: String) ->
     final_string
 }
 
+// A CPP wrapper is needed for this function
+// plain_highlights is list of plain non html highlights splitted by U+001F ( Literally this string ) which is https://symbl.cc/en/001F/
+// This function returns a new updated main_page
+// Pages can be empty, indicating they don't exist
 pub fn highlight_page(
     main_page: String,
     previous_page: String,
@@ -160,8 +180,11 @@ pub fn convert_plain_to_html(plain: &mut String) {
 
 pub fn highlight_html_code(html: &String) -> String {
     let mut final_highlight = html.clone();
-    let start_pure_high = "<b>";
-    let stop_pure_high = "</b>";
+    // Oryginal
+    // "<span style=" background-color:#bbbbbb;">" + highlight + "</span>"
+    //
+    let start_pure_high = "<font style=\"background-color:#bbbbbb;\">";
+    let stop_pure_high = "</font>";
     let text_ends_at = "</span>";
 
     // Regex...
