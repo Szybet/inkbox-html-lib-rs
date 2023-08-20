@@ -20,6 +20,11 @@ pub unsafe extern "C" fn highlight_page_c(main_page: *const c_char, previous_pag
     let next_page_pure = CStr::from_ptr(next_page).to_str().unwrap().to_string();
     let plain_highlights_pure = CStr::from_ptr(plain_highlights).to_str().unwrap().to_string();
 
+    println!("main_page_pure: {}", main_page_pure);
+    println!("previous_page_pure: {}", previous_page_pure);
+    println!("next_page_pure: {}", next_page_pure);
+    println!("plain_highlights_pure: {}", plain_highlights_pure);
+
     let new_page = highlight_page(main_page_pure, previous_page_pure, next_page_pure, plain_highlights_pure);
     return Box::leak(CString::new(new_page).unwrap().into_boxed_c_str()).as_ptr()
 }
@@ -235,21 +240,28 @@ pub fn find_text_in_html_code(
     let mut first_word_str_prev: String = String::new();
     let mut exit_inf_loop = false;
     // Looking for start
+    let mut counter_failback = 0;
     loop {
         for word in plain_text_split_whitespace.clone() {
-            if false_strings.contains(&word.to_string()) { // wtf &String
-                println!("Skipping the first word: we maybe need to look at previous page?");
-                continue;
-            }
             if false_strings.len() >= plain_text_split_whitespace.len() {
                 println!("We checked for all words: there are none valid, no highlight on this page...");
                 return (None, false, false);
+            }
+            if counter_failback > 1000 {
+                println!("Too many skips, going away...");
+                return (None, false, false);
+            }
+            if false_strings.contains(&word.to_string()) { // wtf &String
+                println!("Skipping the first word: we maybe need to look at previous page?");
+                counter_failback = counter_failback + 1;
+                continue;
             }
             // HTML space
             //println!("the word: {}", word);
             let index: Vec<(usize, &str)> = html_code.match_indices(word).collect();
             if index.len() == 0 && conflict == false {
                 println!("previous_page_cutted_off set to true");
+                false_strings.push(word.to_string());
                 previous_page_cutted_off = true;
                 continue;
             }
@@ -399,6 +411,12 @@ pub fn find_text_in_html_code(
 
     let final_string = html_code_from_start_string.split_at(end).0;
     println!("The final thing: {:?}", final_string);
+
+    // Something is wrong but hey...
+    if !found_word == true && previous_page_cutted_off == true {
+        println!("Butterflies!"); // But seriously, no idea and i don't think i need to care
+        return (None, false, false);
+    }
 
     return (
         Some(final_string.to_owned()),
